@@ -73,7 +73,9 @@ jobs:
                   a,b=bout["americanA"],bout["americanB"]
                   assert isinstance(a,int) and isinstance(b,int) and abs(a)>=100 and abs(b)>=100
                   assert bout["sourceType"] == "PUBLIC_DISPLAY_REFERENCE" and not bout["executable"]
-                  writer.writerow({"date":x["eventDate"],"red":bout["fighterA"],"blue":bout["fighterB"],
+                  # The UFC event uses an accented display name; the UFCstats mirror uses ASCII.
+                  model_red = {"Jiří Procházka": "Jiri Prochazka"}.get(bout["fighterA"], bout["fighterA"])
+                  writer.writerow({"date":x["eventDate"],"red":model_red,"blue":bout["fighterB"],
                       "weight_class":bout["division"],"rounds":bout["rounds"],"title":0,
                       "card_pos":i,"red_odds":a,"blue_odds":b})
           print("Verified seven official-page matchups and seven two-sided reference quotes.")
@@ -114,9 +116,11 @@ jobs:
           with prediction.open(encoding="utf-8", newline="") as f:
               rows=list(csv.DictReader(f))
           assert rows and all(x.get("model_p_red","") for x in rows), "Missing model predictions"
-          expected={"Jiří Procházka","Aljamain Sterling","Dan Hooker","Kyoji Horiguchi","Jared Cannonier","Aleksandre Topuria","Shamil Gaziev"}
+          expected={"Jiri Prochazka","Aljamain Sterling","Dan Hooker","Kyoji Horiguchi","Jared Cannonier","Aleksandre Topuria","Shamil Gaziev"}
           matched={x.get("red") for x in rows}
           assert expected.issubset(matched), "Predictions missing confirmed fighter rows"
+          main=next((x for x in rows if x.get("red") == "Jiri Prochazka"), None)
+          assert main and int(main.get("red_ufc_fights", 0)) >= 5, "Main-event fighter ID unresolved: UFC history missing"
           files={}
           for path in sorted((root/"data/raw").rglob("*")):
               if not path.is_file(): continue
@@ -126,6 +130,7 @@ jobs:
               files[str(path.relative_to(root))]={"sha256":h.hexdigest(),"bytes":path.stat().st_size}
           report={"runAt":dt.datetime.now(dt.timezone.utc).isoformat(),"model":"SolvAI/ufcash",
             "modelCommit":os.environ["UFCASH_SHA"],"eventDate":"2026-11-21",
+            "canonicalNameMap":{"Jiří Procházka":"Jiri Prochazka"},
             "inputSource":"https://jsa-ai-trading-hq.vercel.app/api/ufc-reference-odds",
             "inputType":"UFC public display REFERENCE odds, not original opening prices",
             "predictionCount":len(rows),"modelOutput":str(prediction),"rawDataHashes":files,
